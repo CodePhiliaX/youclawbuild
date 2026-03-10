@@ -6,9 +6,6 @@ directories:
 
 files:
   - dist/**/*
-  - src/renderer/**/*
-  - "!src/main/**/*"
-  - "!src/preload/**/*"
 
 mac:
   category: public.app-category.utilities

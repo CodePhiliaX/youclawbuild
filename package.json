@@ -6,7 +6,7 @@
     "type": "git",
     "url": "https://github.com/CodePhiliaX/youclawbuild"
   },
-  "main": "dist/main/index.js",
+  "main": "dist/electron/main/index.js",
   "scripts": {
     "dev": "node scripts/build.mjs && electron .",
     "build": "node scripts/build.mjs",
@@ -22,9 +22,13 @@
   "license": "ISC",
   "packageManager": "pnpm@10.20.0",
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
+    "daisyui": "^5.5.19",
     "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
-    "typescript": "^5.9.3"
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "dependencies": {
     "electron-log": "^5.4.3",

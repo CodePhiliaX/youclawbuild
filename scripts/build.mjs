@@ -1,12 +1,11 @@
 import { execSync } from "child_process";
-import { cpSync } from "fs";
 
-// Compile TypeScript
-console.log("Compiling TypeScript...");
+// Build renderer with Vite
+console.log("Building renderer with Vite...");
+execSync("npx vite build renderer", { stdio: "inherit" });
+
+// Compile electron (main + preload) TypeScript
+console.log("Compiling TypeScript (electron)...");
 execSync("npx tsc", { stdio: "inherit" });
-
-// Copy renderer files to dist
-console.log("Copying renderer files...");
-cpSync("src/renderer", "dist/renderer", { recursive: true });
 
 console.log("Build complete.");

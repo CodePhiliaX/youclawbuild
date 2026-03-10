@@ -6,7 +6,8 @@ on:
       - "v*"
 
 jobs:
-  release:
+  # ── Job 1: 所有平台构建 ──
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +34,7 @@ jobs:
             platform_label: "Linux x64"
 
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.platform_label }}
+    name: Build ${{ matrix.platform_label }}
 
     steps:
       - name: Extract version
@@ -68,15 +69,29 @@ jobs:
           p12-file-base64: ${{ secrets.MAC_CERTS }}
           p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
 
-      - name: Package & Publish
+      # macOS / Linux: 打包并直接发布到 GitHub Release
+      - name: Package & Publish (macOS/Linux)
+        if: runner.os != 'Windows'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: pnpm exec electron-builder ${{ matrix.build_arg }} --publish always
+
+      # Windows: 只打包不发布（等签名后再上传）
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: pnpm exec electron-builder ${{ matrix.build_arg }}
+
+      # Windows: 上传未签名 exe 为 artifact，传给下一个 job
+      - name: Upload unsigned exe as artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: release/*.exe
+          retention-days: 1
 
       - name: Resolve artifact name
         id: artifact
@@ -88,8 +103,8 @@ jobs:
           echo "URL=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$NAME" >> $GITHUB_OUTPUT
 
       - name: Notify Feishu
+        if: runner.os != 'Windows'
         uses: foxundermoon/feishu-action@v2
-        if: always()
         with:
           url: ${{ secrets.FEISHU_WEBHOOK }}
           msg_type: post
@@ -99,14 +114,83 @@ jobs:
                 title: "You Claw v${{ steps.version.outputs.VERSION }} · ${{ matrix.platform_label }} ${{ job.status == 'success' && '✅' || '❌' }}"
                 content:
                 - - tag: text
-                    text: "构建 "
+                    text: "Build "
                   - tag: a
                     text: "#${{ github.run_number }}"
                     href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   - tag: text
-                    text: " ${{ job.status == 'success' && '成功' || '失败' }}"
+                    text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
                 - - tag: text
-                    text: "下载: "
+                    text: "Download: "
                   - tag: a
                     text: "${{ steps.artifact.outputs.NAME }}"
                     href: "${{ steps.artifact.outputs.URL }}"
+
+  # ── Job 2: 在你的 U 盾机器上签名 ──
+  sign-windows:
+    needs: build
+    runs-on: [self-hosted, Windows, X64]
+    name: Sign Windows exe
+
+    steps:
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      # 从 Job 1 下载未签名 exe
+      - name: Download unsigned exe
+        uses: actions/download-artifact@v4
+        with:
+          name: unsigned-exe
+          path: unsigned
+
+      # 用 U 盾签名（SHA-1 + SHA-256 双签，复用原有签名脚本）
+      - name: Sign exe with USB token (SHA-1)
+        shell: bash
+        run: |
+          EXE_PATH=$(ls unsigned/*.exe | head -1)
+          echo "Signing (SHA-1): $EXE_PATH"
+          ${{ secrets.REMOTE_SIGN_SCRIPT }} --alg SHA-1 "$EXE_PATH"
+
+      - name: Sign exe with USB token (SHA-256)
+        shell: bash
+        run: |
+          EXE_PATH=$(ls unsigned/*.exe | head -1)
+          echo "Signing (SHA-256): $EXE_PATH"
+          ${{ secrets.REMOTE_SIGN_SCRIPT }} --alg SHA-256 "$EXE_PATH"
+
+      # 签名后上传到 GitHub Release
+      - name: Upload signed exe to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          EXE_NAME="You-Claw-${VERSION}.exe"
+          gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
+
+      - name: Notify Feishu
+        uses: foxundermoon/feishu-action@v2
+        if: always()
+        with:
+          url: ${{ secrets.FEISHU_WEBHOOK }}
+          msg_type: post
+          content: |
+            post:
+              zh_cn:
+                title: "You Claw v${{ steps.version.outputs.VERSION }} · Windows x64 签名 ${{ job.status == 'success' && '✅' || '❌' }}"
+                content:
+                - - tag: text
+                    text: "签名 "
+                  - tag: a
+                    text: "#${{ github.run_number }}"
+                    href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  - tag: text
+                    text: " ${{ job.status == 'success' && 'succeeded' || 'failed' }}"
+
+      # 清理工作目录
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: Remove-Item -Path unsigned -Recurse -Force -ErrorAction SilentlyContinue
