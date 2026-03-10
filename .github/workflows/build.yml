@@ -168,8 +168,8 @@ jobs:
           VERSION="${{ steps.version.outputs.VERSION }}"
           EXE_NAME="You-Claw-${VERSION}.exe"
           # 先创建 Release（已存在则忽略）
-          gh release create "${{ github.ref_name }}" --title "v${VERSION}" --generate-notes || true
-          gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
+          /opt/homebrew/bin/gh release create "${{ github.ref_name }}" --title "v${VERSION}" --generate-notes || true
+          /opt/homebrew/bin/gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
 
       - name: Notify Feishu
         uses: foxundermoon/feishu-action@v2
