@@ -126,10 +126,10 @@ jobs:
                     text: "${{ steps.artifact.outputs.NAME }}"
                     href: "${{ steps.artifact.outputs.URL }}"
 
-  # ── Job 2: 在你的 U 盾机器上签名 ──
+  # ── Job 2: 在 self-hosted Mac（插 U 盾）上签名 ──
   sign-windows:
     needs: build
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: self-hosted
     name: Sign Windows exe
 
     steps:
@@ -145,20 +145,19 @@ jobs:
           name: unsigned-exe
           path: unsigned
 
-      # 用 U 盾签名（SHA-1 + SHA-256 双签，复用原有签名脚本）
-      - name: Sign exe with USB token (SHA-1)
+      # 用 U 盾签名（jsign + SafeNet PKCS#11）
+      - name: Sign exe with USB token
         shell: bash
         run: |
           EXE_PATH=$(ls unsigned/*.exe | head -1)
-          echo "Signing (SHA-1): $EXE_PATH"
-          ${{ secrets.REMOTE_SIGN_SCRIPT }} --alg SHA-1 "$EXE_PATH"
-
-      - name: Sign exe with USB token (SHA-256)
-        shell: bash
-        run: |
-          EXE_PATH=$(ls unsigned/*.exe | head -1)
-          echo "Signing (SHA-256): $EXE_PATH"
-          ${{ secrets.REMOTE_SIGN_SCRIPT }} --alg SHA-256 "$EXE_PATH"
+          echo "Signing: $EXE_PATH"
+          java -jar /Users/chat2db/Documents/winsign/jsign-6.0.jar \
+            --keystore /Users/chat2db/Documents/winsign/hardwareToken.cfg \
+            --storepass "${{ secrets.STOREPASS }}" \
+            --storetype PKCS11 \
+            --tsaurl http://timestamp.digicert.com \
+            --alias Sectigo_20250108083559 \
+            "$EXE_PATH"
 
       # 签名后上传到 GitHub Release
       - name: Upload signed exe to GitHub Release
@@ -192,5 +191,5 @@ jobs:
       # 清理工作目录
       - name: Cleanup
         if: always()
-        shell: pwsh
-        run: Remove-Item -Path unsigned -Recurse -Force -ErrorAction SilentlyContinue
+        shell: bash
+        run: rm -rf unsigned
