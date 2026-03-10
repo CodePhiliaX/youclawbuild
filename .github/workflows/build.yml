@@ -148,21 +148,15 @@ jobs:
           name: unsigned-exe
           path: unsigned
 
-      # 用 U 盾签名（jsign + SafeNet PKCS#11）
+      # 用 U 盾签名（通过 sign.sh 调用宿主机 jsign）
       - name: Sign exe with USB token
         shell: bash
         run: |
           EXE_PATH=$(ls unsigned/*.exe | head -1)
           echo "Signing: $EXE_PATH"
-          java -jar /Users/chat2db/Documents/winsign/jsign-6.0.jar \
-            --keystore /Users/chat2db/Documents/winsign/hardwareToken.cfg \
-            --storepass "${{ secrets.STOREPASS }}" \
-            --storetype PKCS11 \
-            --tsaurl http://timestamp.digicert.com \
-            --alias Sectigo_20250108083559 \
-            "$EXE_PATH"
+          sign.sh "$EXE_PATH"
 
-      # 创建 Release（如果不存在）并上传签名后的 exe
+      # 等待 Release 存在（由 macOS/Linux build 的 electron-builder 创建）然后上传 exe
       - name: Upload signed exe to GitHub Release
         shell: bash
         env:
@@ -170,9 +164,16 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           EXE_NAME="You-Claw-${VERSION}.exe"
-          # 先创建 Release（已存在则忽略）
-          /opt/homebrew/bin/gh release create "${{ github.ref_name }}" --title "v${VERSION}" --generate-notes || true
-          /opt/homebrew/bin/gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
+          # 等待 Release 被其他 job 创建（最多等 5 分钟）
+          for i in $(seq 1 30); do
+            if gh release view "${{ github.ref_name }}" > /dev/null 2>&1; then
+              echo "Release found"
+              break
+            fi
+            echo "Waiting for release... ($i/30)"
+            sleep 10
+          done
+          gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
 
       - name: Notify Feishu
         uses: foxundermoon/feishu-action@v2
