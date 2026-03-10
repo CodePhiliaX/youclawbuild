@@ -15,7 +15,10 @@
     "publish": "node scripts/build.mjs && electron-builder --publish always"
   },
   "keywords": [],
-  "author": "",
+  "author": {
+    "name": "CodePhiliaX",
+    "email": "huanyueyaoqin@qq.com"
+  },
   "license": "ISC",
   "packageManager": "pnpm@10.20.0",
   "devDependencies": {

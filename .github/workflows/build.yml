@@ -14,25 +14,29 @@ jobs:
           - os: windows-latest
             arch: x64
             build_arg: "--win --x64"
-            file_extension: ".exe"
+            artifact: "You-Claw-${VERSION}.exe"
+            platform_label: "Windows x64"
           - os: macos-latest
             arch: x64
             build_arg: "--mac --x64"
-            file_extension: "-x64.dmg"
+            artifact: "You-Claw-${VERSION}-x64.dmg"
+            platform_label: "macOS Intel"
           - os: macos-latest
             arch: arm64
             build_arg: "--mac --arm64"
-            file_extension: "-arm64.dmg"
+            artifact: "You-Claw-${VERSION}-arm64.dmg"
+            platform_label: "macOS Apple Silicon"
           - os: ubuntu-latest
             arch: x64
             build_arg: "--linux --x64"
-            file_extension: "-x64.AppImage"
+            artifact: "You-Claw-${VERSION}-x86_64.AppImage"
+            platform_label: "Linux x64"
 
     runs-on: ${{ matrix.os }}
+    name: ${{ matrix.platform_label }}
 
     steps:
-      # 从 tag 名提取版本号（去掉 v 前缀）
-      - name: Extract version from tag
+      - name: Extract version
         id: version
         shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
@@ -40,7 +44,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 安装 Node.js + pnpm
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -52,15 +55,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      # 用 tag 版本号写入 package.json
       - name: Set version
         run: pnpm pkg set version=${{ steps.version.outputs.VERSION }}
 
-      # 编译 TypeScript
       - name: Build
         run: pnpm run build
 
-      # macOS 签名 & 公证
       - name: Import macOS certificates
         if: runner.os == 'macOS'
         uses: apple-actions/import-codesign-certs@v3
@@ -68,29 +68,26 @@ jobs:
           p12-file-base64: ${{ secrets.MAC_CERTS }}
           p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
 
-      # 打包 Electron & 发布到 GitHub Releases
       - name: Package & Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS 公证
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows 签名（如果有的话）
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: >
-          pnpm exec electron-builder
-          ${{ matrix.build_arg }}
-          --publish always
-          -c.extraMetadata.version=${{ steps.version.outputs.VERSION }}
+        run: pnpm exec electron-builder ${{ matrix.build_arg }} --publish always
 
-      # 打印产物
-      - name: List release artifacts
-        run: ls -la release/
+      - name: Resolve artifact name
+        id: artifact
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          NAME=$(echo '${{ matrix.artifact }}' | sed "s/\${VERSION}/$VERSION/g")
+          echo "NAME=$NAME" >> $GITHUB_OUTPUT
+          echo "URL=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$NAME" >> $GITHUB_OUTPUT
 
-      # 发送飞书通知
-      - name: Send Feishu notification
+      - name: Notify Feishu
         uses: foxundermoon/feishu-action@v2
         if: always()
         with:
@@ -99,19 +96,17 @@ jobs:
           content: |
             post:
               zh_cn:
-                title: "You Claw ${{ steps.version.outputs.VERSION }} ${{ runner.os }} ${{ matrix.arch }} 打包${{ job.status == 'success' && '完成' || '失败' }}通知"
+                title: "You Claw v${{ steps.version.outputs.VERSION }} · ${{ matrix.platform_label }} ${{ job.status == 'success' && '✅' || '❌' }}"
                 content:
                 - - tag: text
-                    text: "任务: "
+                    text: "构建 "
                   - tag: a
                     text: "#${{ github.run_number }}"
                     href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                - - tag: text
-                    text: "状态: ${{ job.status == 'success' && '✅ 成功' || '❌ 失败' }}"
-                - - tag: text
-                    text: "版本: ${{ steps.version.outputs.VERSION }}"
+                  - tag: text
+                    text: " ${{ job.status == 'success' && '成功' || '失败' }}"
                 - - tag: text
                     text: "下载: "
                   - tag: a
-                    text: "GitHub Releases"
-                    href: "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+                    text: "${{ steps.artifact.outputs.NAME }}"
+                    href: "${{ steps.artifact.outputs.URL }}"
