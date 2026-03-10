@@ -1,0 +1,119 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+            build_arg: "--win --x64"
+            file_extension: ".exe"
+          - os: macos-latest
+            arch: x64
+            build_arg: "--mac --x64"
+            file_extension: "-x64.dmg"
+          - os: macos-latest
+            arch: arm64
+            build_arg: "--mac --arm64"
+            file_extension: "-arm64.dmg"
+          - os: ubuntu-latest
+            arch: x64
+            build_arg: "--linux --x64"
+            file_extension: "-x64.AppImage"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # 从 tag 名提取版本号（去掉 v 前缀）
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 安装 Node.js + pnpm
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install
+
+      # 用 tag 版本号写入 package.json
+      - name: Set version
+        run: pnpm pkg set version=${{ steps.version.outputs.VERSION }}
+
+      # 编译 TypeScript
+      - name: Build
+        run: pnpm run build
+
+      # macOS 签名 & 公证
+      - name: Import macOS certificates
+        if: runner.os == 'macOS'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MAC_CERTS }}
+          p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
+
+      # 打包 Electron & 发布到 GitHub Releases
+      - name: Package & Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS 公证
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows 签名（如果有的话）
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: >
+          pnpm exec electron-builder
+          ${{ matrix.build_arg }}
+          --publish always
+          -c.extraMetadata.version=${{ steps.version.outputs.VERSION }}
+
+      # 打印产物
+      - name: List release artifacts
+        run: ls -la release/
+
+      # 发送飞书通知
+      - name: Send Feishu notification
+        uses: foxundermoon/feishu-action@v2
+        if: always()
+        with:
+          url: ${{ secrets.FEISHU_WEBHOOK }}
+          msg_type: post
+          content: |
+            post:
+              zh_cn:
+                title: "You Claw ${{ steps.version.outputs.VERSION }} ${{ runner.os }} ${{ matrix.arch }} 打包${{ job.status == 'success' && '完成' || '失败' }}通知"
+                content:
+                - - tag: text
+                    text: "任务: "
+                  - tag: a
+                    text: "#${{ github.run_number }}"
+                    href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                - - tag: text
+                    text: "状态: ${{ job.status == 'success' && '✅ 成功' || '❌ 失败' }}"
+                - - tag: text
+                    text: "版本: ${{ steps.version.outputs.VERSION }}"
+                - - tag: text
+                    text: "下载: "
+                  - tag: a
+                    text: "GitHub Releases"
+                    href: "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"

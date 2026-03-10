@@ -1,0 +1,31 @@
+{
+  "name": "youclaw",
+  "version": "1.0.0",
+  "description": "YouClaw desktop client",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "node scripts/build.mjs && electron .",
+    "build": "node scripts/build.mjs",
+    "pack": "node scripts/build.mjs && electron-builder --dir",
+    "dist": "node scripts/build.mjs && electron-builder",
+    "publish": "node scripts/build.mjs && electron-builder --publish always"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.20.0",
+  "devDependencies": {
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  }
+}

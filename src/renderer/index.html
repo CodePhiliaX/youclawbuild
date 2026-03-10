@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>You Claw</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    .titlebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 38px;
+      -webkit-app-region: drag;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #1a1a2e;
+      color: #e0e0e0;
+    }
+    .container {
+      text-align: center;
+    }
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+      color: #ffffff;
+    }
+    p {
+      font-size: 1.1rem;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar"></div>
+  <div class="container">
+    <h1>You Claw -1</h1>
+    <p>Desktop client is running.</p>
+  </div>
+</body>
+</html>

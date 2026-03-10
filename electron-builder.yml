@@ -1,0 +1,43 @@
+appId: com.youclaw.app
+productName: You Claw
+directories:
+  buildResources: resources
+  output: release
+
+files:
+  - dist/**/*
+  - src/renderer/**/*
+  - "!src/main/**/*"
+  - "!src/preload/**/*"
+
+mac:
+  category: public.app-category.utilities
+  icon: resources/logo.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: true
+  artifactName: "You-Claw-${version}-${arch}.${ext}"
+  target:
+    - dmg
+    - zip
+
+win:
+  icon: resources/logo.ico
+  artifactName: "You-Claw-${version}.${ext}"
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  icon: resources/logo.png
+  artifactName: "You-Claw-${version}-${arch}.${ext}"
+  target:
+    - AppImage
+    - deb
+  category: Utility
+
+publish:
+  provider: github
