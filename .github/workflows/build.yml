@@ -6,17 +6,53 @@ on:
       - "v*"
 
 jobs:
-  # ── Job 1: 所有平台构建 ──
-  build:
+  # ── Job 1a: Windows 构建（独立，签名 job 只等这个） ──
+  build-windows:
+    runs-on: windows-latest
+    name: Build Windows x64
+
+    steps:
+      - name: Extract version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Set version
+        run: pnpm pkg set version=${{ steps.version.outputs.VERSION }}
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Package (Windows)
+        run: pnpm exec electron-builder --win --x64 --publish never
+
+      - name: Upload unsigned exe as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: release/*.exe
+          retention-days: 1
+
+  # ── Job 1b: macOS / Linux 构建 ──
+  build-others:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            arch: x64
-            build_arg: "--win --x64"
-            artifact: "You-Claw-${VERSION}.exe"
-            platform_label: "Windows x64"
           - os: macos-latest
             arch: x64
             build_arg: "--mac --x64"
@@ -69,29 +105,13 @@ jobs:
           p12-file-base64: ${{ secrets.MAC_CERTS }}
           p12-password: ${{ secrets.MAC_CERTS_PASSWORD }}
 
-      # macOS / Linux: 打包并直接发布到 GitHub Release
-      - name: Package & Publish (macOS/Linux)
-        if: runner.os != 'Windows'
+      - name: Package & Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm exec electron-builder ${{ matrix.build_arg }} --publish always
-
-      # Windows: 只打包不发布（等签名后再上传）
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        run: pnpm exec electron-builder ${{ matrix.build_arg }} --publish never
-
-      # Windows: 上传未签名 exe 为 artifact，传给下一个 job
-      - name: Upload unsigned exe as artifact
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: unsigned-exe
-          path: release/*.exe
-          retention-days: 1
 
       - name: Resolve artifact name
         id: artifact
@@ -103,7 +123,6 @@ jobs:
           echo "URL=https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$NAME" >> $GITHUB_OUTPUT
 
       - name: Notify Feishu
-        if: runner.os != 'Windows'
         uses: foxundermoon/feishu-action@v2
         with:
           url: ${{ secrets.FEISHU_WEBHOOK }}
@@ -128,7 +147,7 @@ jobs:
 
   # ── Job 2: 在 self-hosted Mac（插 U 盾）上签名 ──
   sign-windows:
-    needs: build
+    needs: build-windows
     runs-on: self-hosted
     name: Sign Windows exe
 
