@@ -2,6 +2,10 @@
   "name": "youclaw",
   "version": "1.0.0",
   "description": "YouClaw desktop client",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodePhiliaX/youclawbuild"
+  },
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "node scripts/build.mjs && electron .",
