@@ -82,7 +82,7 @@ jobs:
       # Windows: 只打包不发布（等签名后再上传）
       - name: Package (Windows)
         if: runner.os == 'Windows'
-        run: pnpm exec electron-builder ${{ matrix.build_arg }}
+        run: pnpm exec electron-builder ${{ matrix.build_arg }} --publish never
 
       # Windows: 上传未签名 exe 为 artifact，传给下一个 job
       - name: Upload unsigned exe as artifact
