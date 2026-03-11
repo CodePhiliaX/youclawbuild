@@ -184,7 +184,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           EXE_PATH="unsigned/You-Claw-${VERSION}.exe"
-          NEW_SHA512=$(shasum -a 512 "$EXE_PATH" | awk '{print $1}' | xxd -r -p | base64)
+          NEW_SHA512=$(shasum -a 512 "$EXE_PATH" | awk '{print $1}' | xxd -r -p | base64 | tr -d '\n')
           NEW_SIZE=$(stat -f%z "$EXE_PATH" 2>/dev/null || stat -c%s "$EXE_PATH")
           sed -i.bak "s|sha512: .*|sha512: ${NEW_SHA512}|" unsigned/latest.yml
           sed -i.bak "s|size: .*|size: ${NEW_SIZE}|" unsigned/latest.yml
