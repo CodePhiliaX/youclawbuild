@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Settings } from "lucide-react";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { useTheme } from "./hooks/useTheme";
+import { electronAPI } from "@/lib/electron";
 
 export default function App() {
   const [version, setVersion] = useState("");
@@ -9,13 +10,9 @@ export default function App() {
   useTheme();
 
   useEffect(() => {
-    window.electronAPI.getVersion().then((v) => {
-      setVersion("v" + v);
-    });
-
-    window.electronAPI.onOpenSettings(() => {
-      setSettingsOpen(true);
-    });
+    electronAPI.getVersion().then((v) => setVersion("v" + v));
+    const cleanup = electronAPI.onOpenSettings(() => setSettingsOpen(true));
+    return cleanup;
   }, []);
 
   return (

@@ -76,6 +76,10 @@ export function setupUpdater(): void {
   });
 }
 
+export function setAllowPrerelease(value: boolean): void {
+  autoUpdater.allowPrerelease = value;
+}
+
 export function checkForUpdates(): void {
   autoUpdater.checkForUpdatesAndNotify().catch((err) => {
     log.error("Failed to check for updates:", err);

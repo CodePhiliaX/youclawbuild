@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Label } from "./ui/label";
 import { applyThemeToDOM, type Theme } from "../hooks/useTheme";
+import { electronAPI } from "@/lib/electron";
 
 const themeOptions: { value: Theme; label: string; description: string }[] = [
   { value: "dark", label: "Dark", description: "Dark backgrounds with light text" },
@@ -9,19 +10,17 @@ const themeOptions: { value: Theme; label: string; description: string }[] = [
   { value: "system", label: "System", description: "Follow your system appearance" },
 ];
 
-export function GeneralPanel() {
+export function BasePanel() {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    window.electronAPI.getTheme().then((t) => {
-      setTheme(t as Theme);
-    });
+    electronAPI.getTheme().then(setTheme);
   }, []);
 
   const handleThemeChange = (value: string) => {
     const newTheme = value as Theme;
     setTheme(newTheme);
-    window.electronAPI.setTheme(newTheme);
+    electronAPI.setTheme(newTheme);
     applyThemeToDOM(newTheme);
   };
 

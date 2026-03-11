@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { electronAPI } from "@/lib/electron";
 
 export type Theme = "dark" | "light" | "system";
 
@@ -16,15 +17,13 @@ export function applyThemeToDOM(theme: Theme): void {
 
 export function useTheme(): void {
   useEffect(() => {
-    // Apply saved theme on load
-    window.electronAPI.getTheme().then((theme) => {
-      applyThemeToDOM(theme as Theme);
+    electronAPI.getTheme().then((theme) => {
+      applyThemeToDOM(theme);
     });
 
-    // Listen for system theme changes
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = () => {
-      window.electronAPI.getTheme().then((theme) => {
+      electronAPI.getTheme().then((theme) => {
         if (theme === "system") {
           applyThemeToDOM("system");
         }

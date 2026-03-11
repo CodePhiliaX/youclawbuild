@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogClose } from "./ui/dialog";
-import { GeneralPanel } from "./GeneralPanel";
+import { BasePanel } from "./GeneralPanel";
 import { AboutPanel } from "./AboutPanel";
 import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 
-type Tab = "general" | "about";
+type Tab = "base" | "about";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -13,12 +13,12 @@ interface SettingsDialogProps {
 }
 
 const tabs: { id: Tab; label: string }[] = [
-  { id: "general", label: "General" },
+  { id: "base", label: "Base" },
   { id: "about", label: "About" },
 ];
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const [currentTab, setCurrentTab] = useState<Tab>("general");
+  const [currentTab, setCurrentTab] = useState<Tab>("base");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,7 +48,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
         {/* Content */}
         <div className="flex-1 p-6 overflow-y-auto">
-          {currentTab === "general" ? <GeneralPanel /> : <AboutPanel />}
+          {currentTab === "base" ? <BasePanel /> : <AboutPanel />}
         </div>
       </DialogContent>
     </Dialog>

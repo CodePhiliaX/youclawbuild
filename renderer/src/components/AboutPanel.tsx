@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
+import { electronAPI, type UpdateStatusType } from "@/lib/electron";
 
-type UpdateState = {
-  status: "idle" | "checking" | "available" | "downloading" | "ready" | "up-to-date" | "error";
+interface UpdateState {
+  status: UpdateStatusType | "idle";
   message: string;
   progress: number;
   newVersion?: string;
-};
+}
 
 export function AboutPanel() {
   const [version, setVersion] = useState("");
+  const [allowPrerelease, setAllowPrerelease] = useState(false);
   const [update, setUpdate] = useState<UpdateState>({
     status: "idle",
     message: "",
@@ -18,11 +20,10 @@ export function AboutPanel() {
   });
 
   useEffect(() => {
-    window.electronAPI.getVersion().then((v) => {
-      setVersion("v" + v);
-    });
+    electronAPI.getVersion().then((v) => setVersion("v" + v));
+    electronAPI.getAllowPrerelease().then(setAllowPrerelease);
 
-    window.electronAPI.onUpdateStatus((status, data) => {
+    const cleanup = electronAPI.onUpdateStatus((status, data) => {
       switch (status) {
         case "checking":
           setUpdate({ status: "checking", message: "Checking for updates...", progress: 0 });
@@ -52,15 +53,17 @@ export function AboutPanel() {
           break;
       }
     });
+
+    return cleanup;
   }, []);
 
   const handleCheck = () => {
     setUpdate({ status: "checking", message: "Checking...", progress: 0 });
-    window.electronAPI.checkForUpdates();
+    electronAPI.checkForUpdates();
   };
 
   const handleInstall = () => {
-    window.electronAPI.installUpdate();
+    electronAPI.installUpdate();
   };
 
   const isChecking = update.status === "checking";
@@ -93,6 +96,26 @@ export function AboutPanel() {
           {update.message}
         </p>
       </div>
+      <label className="flex items-center gap-3 mt-8 px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#2a2a4a]">
+        <input
+          type="checkbox"
+          checked={allowPrerelease}
+          onChange={(e) => {
+            const value = e.target.checked;
+            setAllowPrerelease(value);
+            electronAPI.setAllowPrerelease(value);
+          }}
+          className="w-4 h-4 rounded accent-blue-500 cursor-pointer"
+        />
+        <div>
+          <p className="text-sm font-medium text-gray-900 dark:text-[#e0e0e0]">
+            Beta Updates
+          </p>
+          <p className="text-xs text-gray-500 dark:text-[#666]">
+            Receive pre-release versions for early testing
+          </p>
+        </div>
+      </label>
     </div>
   );
 }

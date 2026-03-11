@@ -1,11 +1,34 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, nativeTheme } from "electron";
 import path from "path";
 import fs from "fs";
-import { setupUpdater, checkForUpdates } from "./updater";
+import { setupUpdater, checkForUpdates, setAllowPrerelease } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+
+// Settings persistence
+const settingsFilePath = path.join(app.getPath("userData"), "settings.json");
+
+function getSettings(): Record<string, unknown> {
+  try {
+    const data = fs.readFileSync(settingsFilePath, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return {};
+  }
+}
+
+function saveSetting(key: string, value: unknown): void {
+  const settings = getSettings();
+  settings[key] = value;
+  fs.writeFileSync(settingsFilePath, JSON.stringify(settings), "utf-8");
+}
+
+function getAllowPrerelease(): boolean {
+  const settings = getSettings();
+  return settings.allowPrerelease === true;
+}
 
 // Theme persistence
 const themeFilePath = path.join(app.getPath("userData"), "theme.json");
@@ -39,8 +62,15 @@ function applyTheme(theme: string): void {
 
 function createTray(): void {
   const iconPath = path.join(__dirname, "../../../resources/logo.png");
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
-  tray = new Tray(icon);
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 44, height: 44 });
+  // Mark as @2x so macOS renders at 22pt (standard tray icon size)
+  icon.setTemplateImage(false);
+  const scaledIcon = nativeImage.createFromBuffer(icon.toPNG(), {
+    width: 22,
+    height: 22,
+    scaleFactor: 2.0,
+  });
+  tray = new Tray(scaledIcon);
   tray.setToolTip("You Claw");
 
   const contextMenu = Menu.buildFromTemplate([
@@ -177,6 +207,16 @@ app.whenReady().then(() => {
     saveTheme(theme);
     applyTheme(theme);
   });
+
+  ipcMain.handle("get-allow-prerelease", () => getAllowPrerelease());
+
+  ipcMain.handle("set-allow-prerelease", (_event, value: boolean) => {
+    saveSetting("allowPrerelease", value);
+    setAllowPrerelease(value);
+  });
+
+  // Apply saved prerelease setting before setting up updater
+  setAllowPrerelease(getAllowPrerelease());
 
   setupUpdater();
   createAppMenu();
