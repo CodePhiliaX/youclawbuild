@@ -6,7 +6,7 @@ on:
       - "v*"
 
 jobs:
-  # ── Job 1a: Windows 构建（独立，签名 job 只等这个） ──
+  # ── Job 1a: Windows build (independent, sign job only waits for this) ──
   build-windows:
     runs-on: windows-latest
     name: Build Windows x64
@@ -47,7 +47,14 @@ jobs:
           path: release/*.exe
           retention-days: 1
 
-  # ── Job 1b: macOS / Linux 构建 ──
+      - name: Upload latest.yml as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-yml
+          path: release/latest.yml
+          retention-days: 1
+
+  # ── Job 1b: macOS / Linux build ──
   build-others:
     strategy:
       fail-fast: false
@@ -145,7 +152,7 @@ jobs:
                     text: "${{ steps.artifact.outputs.NAME }}"
                     href: "${{ steps.artifact.outputs.URL }}"
 
-  # ── Job 2: 在 self-hosted Mac（插 U 盾）上签名 ──
+  # ── Job 2: Sign on self-hosted Mac (with USB token) ──
   sign-windows:
     needs: build-windows
     runs-on: self-hosted
@@ -160,14 +167,20 @@ jobs:
         shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
-      # 从 Job 1 下载未签名 exe
+      # Download unsigned exe from build-windows
       - name: Download unsigned exe
         uses: actions/download-artifact@v4
         with:
           name: unsigned-exe
           path: unsigned
 
-      # 用 U 盾签名（通过 sign.sh 调用宿主机 jsign）
+      - name: Download latest.yml
+        uses: actions/download-artifact@v4
+        with:
+          name: latest-yml
+          path: unsigned
+
+      # Sign with USB token (via sign.sh calling jsign on host)
       - name: Sign exe with USB token
         shell: bash
         run: |
@@ -175,15 +188,29 @@ jobs:
           echo "Signing: $EXE_PATH"
           sign.sh "$EXE_PATH"
 
-      # 等待 Release 存在（由 macOS/Linux build 的 electron-builder 创建）然后上传 exe
-      - name: Upload signed exe to GitHub Release
+      # Update latest.yml sha512 and size after signing
+      - name: Update latest.yml with signed exe hash
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          EXE_PATH="unsigned/You-Claw-${VERSION}.exe"
+          NEW_SHA512=$(shasum -a 512 "$EXE_PATH" | awk '{print $1}' | xxd -r -p | base64)
+          NEW_SIZE=$(stat -f%z "$EXE_PATH" 2>/dev/null || stat -c%s "$EXE_PATH")
+          sed -i.bak "s|sha512: .*|sha512: ${NEW_SHA512}|" unsigned/latest.yml
+          sed -i.bak "s|size: .*|size: ${NEW_SIZE}|" unsigned/latest.yml
+          rm -f unsigned/latest.yml.bak
+          echo "Updated latest.yml:"
+          cat unsigned/latest.yml
+
+      # Wait for Release to exist (created by macOS/Linux electron-builder) then upload exe + latest.yml
+      - name: Upload signed exe and latest.yml to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           EXE_NAME="You-Claw-${VERSION}.exe"
-          # 等待 Release 被其他 job 创建（最多等 5 分钟）
+          # Wait for Release to be created by other jobs (up to 5 minutes)
           for i in $(seq 1 30); do
             if gh release view "${{ github.ref_name }}" > /dev/null 2>&1; then
               echo "Release found"
@@ -193,6 +220,7 @@ jobs:
             sleep 10
           done
           gh release upload "${{ github.ref_name }}" "unsigned/$EXE_NAME" --clobber
+          gh release upload "${{ github.ref_name }}" "unsigned/latest.yml" --clobber
 
       - name: Notify Feishu
         uses: foxundermoon/feishu-action@v2
@@ -203,10 +231,10 @@ jobs:
           content: |
             post:
               zh_cn:
-                title: "You Claw v${{ steps.version.outputs.VERSION }} · Windows x64 签名 ${{ job.status == 'success' && '✅' || '❌' }}"
+                title: "You Claw v${{ steps.version.outputs.VERSION }} · Windows x64 Signing ${{ job.status == 'success' && '✅' || '❌' }}"
                 content:
                 - - tag: text
-                    text: "签名 "
+                    text: "Signing "
                   - tag: a
                     text: "#${{ github.run_number }}"
                     href: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -218,7 +246,7 @@ jobs:
                     text: "You-Claw-${{ steps.version.outputs.VERSION }}.exe"
                     href: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/You-Claw-${{ steps.version.outputs.VERSION }}.exe"
 
-      # 清理工作目录
+      # Clean up working directory
       - name: Cleanup
         if: always()
         shell: bash
